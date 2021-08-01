@@ -90,7 +90,7 @@ func (m *MockTCPConn) SetWriteDeadline(t time.Time) error {
 func TestTCPConn_ReadFrame2(t *testing.T) {
 
 	t.Run("Normal", func(t *testing.T) {
-		conn := NewConn(&MockTCPConn{Buffer: new(bytes.Buffer)})
+		conn := NewTCPConn(&MockTCPConn{Buffer: new(bytes.Buffer)})
 		frame1, _ := NewTCPFrame(OpBinary, []byte("Hello"))
 		frame2, _ := NewTCPFrame(OpClose, []byte("World"))
 		inputFrames := []Frame{
@@ -110,7 +110,7 @@ func TestTCPConn_ReadFrame2(t *testing.T) {
 	})
 
 	t.Run("Dirty Read", func(t *testing.T) {
-		conn := NewConn(&MockTCPConn{Buffer: new(bytes.Buffer)})
+		conn := NewTCPConn(&MockTCPConn{Buffer: new(bytes.Buffer)})
 		// 直接读取
 		f, err := conn.ReadFrame()
 		assert.ErrorIs(t, err, io.EOF)
@@ -118,7 +118,7 @@ func TestTCPConn_ReadFrame2(t *testing.T) {
 	})
 
 	t.Run("Not Matched Read", func(t *testing.T) {
-		conn := NewConn(&MockTCPConn{Buffer: new(bytes.Buffer)})
+		conn := NewTCPConn(&MockTCPConn{Buffer: new(bytes.Buffer)})
 
 		// 写入一个
 		frame, _ := NewTCPFrame(OpBinary, []byte("Hello"))
