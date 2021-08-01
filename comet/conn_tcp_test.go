@@ -91,9 +91,11 @@ func TestTCPConn_ReadFrame2(t *testing.T) {
 
 	t.Run("Normal", func(t *testing.T) {
 		conn := NewConn(&MockTCPConn{Buffer: new(bytes.Buffer)})
+		frame1, _ := NewTCPFrame(OpBinary, []byte("Hello"))
+		frame2, _ := NewTCPFrame(OpClose, []byte("World"))
 		inputFrames := []Frame{
-			NewTCPFrame(OpBinary, []byte("Hello")),
-			NewTCPFrame(OpClose, []byte("World")),
+			frame1,
+			frame2,
 		}
 
 		for _, frame := range inputFrames {
@@ -119,7 +121,7 @@ func TestTCPConn_ReadFrame2(t *testing.T) {
 		conn := NewConn(&MockTCPConn{Buffer: new(bytes.Buffer)})
 
 		// 写入一个
-		frame := NewTCPFrame(OpBinary, []byte("Hello"))
+		frame, _ := NewTCPFrame(OpBinary, []byte("Hello"))
 		err := conn.WriteFrame(frame)
 		assert.NoError(t, err)
 

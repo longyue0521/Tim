@@ -20,7 +20,7 @@ func NewConn(conn net.Conn) Conn {
 }
 
 func (t *TCPConn) ReadFrame() (Frame, error) {
-	var f TCPFrame
+	var f tcpFrame
 	if err := t.decoder.Decode(&f); err != nil {
 		return nil, err
 	}
