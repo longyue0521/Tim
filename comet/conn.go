@@ -7,5 +7,5 @@ type Conn interface {
 	ReadFrame() (Frame, error)
 	// WriteFrame(OpCode, []byte) error
 	WriteFrame(Frame) error
-	// Flush() error
+	Flush() error
 }

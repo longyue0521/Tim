@@ -87,15 +87,15 @@ func (m *MockTCPConn) SetWriteDeadline(t time.Time) error {
 	panic("not implemented") // TODO: Implement
 }
 
-func TestTCPConn_ReadFrame2(t *testing.T) {
+func TestTCPConn(t *testing.T) {
 
 	t.Run("Normal", func(t *testing.T) {
 		conn := NewTCPConn(&MockTCPConn{Buffer: new(bytes.Buffer)})
-		frame1, _ := NewTCPFrame(OpBinary, []byte("Hello"))
-		frame2, _ := NewTCPFrame(OpClose, []byte("World"))
 		inputFrames := []Frame{
-			frame1,
-			frame2,
+			{},
+			{OpPing, nil},
+			{OpBinary, []byte("Hello")},
+			{OpClose, []byte("World")},
 		}
 
 		for _, frame := range inputFrames {
@@ -113,19 +113,24 @@ func TestTCPConn_ReadFrame2(t *testing.T) {
 		conn := NewTCPConn(&MockTCPConn{Buffer: new(bytes.Buffer)})
 		// 直接读取
 		f, err := conn.ReadFrame()
+
 		assert.ErrorIs(t, err, io.EOF)
-		assert.Nil(t, f)
+		assert.Equal(t, Frame{}, f)
+		assert.Equal(t, OpContinuation, f.OpCode)
+		assert.Equal(t, []byte(nil), f.Payload)
+		assert.Nil(t, f.Payload)
+
 	})
 
 	t.Run("Not Matched Read", func(t *testing.T) {
 		conn := NewTCPConn(&MockTCPConn{Buffer: new(bytes.Buffer)})
 
 		// 写入一个
-		frame, _ := NewTCPFrame(OpBinary, []byte("Hello"))
+		frame := Frame{OpBinary, []byte("Hello")}
 		err := conn.WriteFrame(frame)
 		assert.NoError(t, err)
 
-		// 再读取一个
+		// 读取一个
 		f, err := conn.ReadFrame()
 		assert.NoError(t, err)
 
@@ -135,6 +140,28 @@ func TestTCPConn_ReadFrame2(t *testing.T) {
 		// 再读一次，不匹配
 		f, err = conn.ReadFrame()
 		assert.ErrorIs(t, err, io.EOF)
-		assert.Nil(t, f)
+		assert.Equal(t, Frame{}, f)
 	})
+
+	t.Run("Empty Payload", func(t *testing.T) {
+		conn := NewTCPConn(&MockTCPConn{Buffer: new(bytes.Buffer)})
+
+		// 写入一个
+		frame := Frame{OpBinary, []byte{}}
+		err := conn.WriteFrame(frame)
+		assert.NoError(t, err)
+
+		// 读取一个
+		f, err := conn.ReadFrame()
+		assert.NoError(t, err)
+
+		// 匹配
+		// 注意：这里读取出来的是Frame{OpBinary, nil}
+		//      而不是Frame{OpBinary, []byte{}}
+		//      下面的断言会出错
+		// assert.Equal(t, frame, f)
+		assert.Equal(t, OpBinary, f.OpCode)
+		assert.Nil(t, f.Payload)
+	})
+
 }

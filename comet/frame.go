@@ -1,7 +1,6 @@
 package comet
 
 import (
-	"encoding"
 	"errors"
 )
 
@@ -33,11 +32,7 @@ func IsValidOpCode(code OpCode) bool {
 	return ok
 }
 
-type Frame interface {
-	OpCode() OpCode
-	//SetOpCode(OpCode)
-	Payload() []byte
-	//SetPayload([]byte)
-	encoding.BinaryMarshaler
-	encoding.BinaryUnmarshaler
+type Frame struct {
+	OpCode  OpCode
+	Payload []byte
 }
