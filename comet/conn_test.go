@@ -2,11 +2,15 @@ package comet
 
 import (
 	"bytes"
+	"context"
+	"fmt"
 	"io"
 	"net"
 	"testing"
 	"time"
 
+	"github.com/gobwas/ws"
+	"github.com/gobwas/ws/wsutil"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -47,7 +51,6 @@ func (m *MockNetConn) SetWriteDeadline(t time.Time) error {
 }
 func TestConn(t *testing.T) {
 	tcpConn := &MockNetConn{&bytes.Buffer{}}
-	wsConn := &MockNetConn{&bytes.Buffer{}}
 
 	frames := []Frame{
 		{},
@@ -63,10 +66,6 @@ func TestConn(t *testing.T) {
 		"TCP": {
 			client: NewTCPConn(tcpConn),
 			server: NewTCPConn(tcpConn),
-		},
-		"WS": {
-			client: NewWSConn(wsConn, true),
-			server: NewWSConn(wsConn, false),
 		},
 	}
 
@@ -106,9 +105,7 @@ func TestConn(t *testing.T) {
 }
 
 func TestEmptyPayload(t *testing.T) {
-
 	tcpConn := &MockNetConn{&bytes.Buffer{}}
-	wsConn := &MockNetConn{&bytes.Buffer{}}
 
 	tests := map[string]struct {
 		client Conn
@@ -117,10 +114,6 @@ func TestEmptyPayload(t *testing.T) {
 		"TCP": {
 			client: NewTCPConn(tcpConn),
 			server: NewTCPConn(tcpConn),
-		},
-		"WS": {
-			client: NewWSConn(wsConn, true),
-			server: NewWSConn(wsConn, false),
 		},
 	}
 
@@ -153,15 +146,12 @@ func TestEmptyPayload(t *testing.T) {
 
 func TestDirtyRead(t *testing.T) {
 	tcpConn := &MockNetConn{&bytes.Buffer{}}
-	wsConn := &MockNetConn{&bytes.Buffer{}}
 
 	tests := map[string]struct {
 		conn Conn
 	}{
 		"TCP Client": {NewTCPConn(tcpConn)},
 		"TCP Server": {NewTCPConn(tcpConn)},
-		"WS Client":  {NewWSConn(wsConn, true)},
-		"WS Server":  {NewWSConn(wsConn, false)},
 	}
 
 	for name, tt := range tests {
@@ -180,7 +170,6 @@ func TestDirtyRead(t *testing.T) {
 
 func TestUnmachedRead(t *testing.T) {
 	tcpConn := &MockNetConn{&bytes.Buffer{}}
-	wsConn := &MockNetConn{&bytes.Buffer{}}
 
 	tests := map[string]struct {
 		client Conn
@@ -189,10 +178,6 @@ func TestUnmachedRead(t *testing.T) {
 		"TCP": {
 			client: NewTCPConn(tcpConn),
 			server: NewTCPConn(tcpConn),
-		},
-		"WS": {
-			client: NewWSConn(wsConn, true),
-			server: NewWSConn(wsConn, false),
 		},
 	}
 
@@ -223,4 +208,98 @@ func TestUnmachedRead(t *testing.T) {
 
 		})
 	}
+}
+
+func TestWebsocket_ServerConn_ReadFrame(t *testing.T) {
+
+	frames := []Frame{
+		{OpPing, []byte("Ping....")},
+		{OpPong, []byte("Pong....")},
+		{OpBinary, []byte("websocket")},
+	}
+
+	// 创建监听socket
+	ln, err := net.Listen("tcp", "127.0.0.1:")
+	assert.NoError(t, err)
+
+	// Mock Write-Only websocket 客户端
+	go func() {
+		url := fmt.Sprintf("ws://%s/", ln.Addr().String())
+		conn, _, _, err := ws.Dial(context.Background(), url)
+		assert.NoError(t, err)
+
+		// 写
+		for _, frame := range frames {
+			err = wsutil.WriteClientMessage(conn, ws.OpCode(frame.OpCode), frame.Payload)
+			assert.NoError(t, err)
+		}
+
+		err = conn.Close()
+		assert.NoError(t, err)
+	}()
+
+	// 创建服务端socket
+	conn, err := ln.Accept()
+	assert.NoError(t, err)
+	assert.NoError(t, ln.Close())
+
+	// 创建服务端Websocket
+	wsConn, err := NewWSConn(conn, false)
+	assert.NoError(t, err)
+
+	for _, frame := range frames {
+		f, err := wsConn.ReadFrame()
+		assert.NoError(t, err)
+		assert.Equal(t, frame, f)
+	}
+
+	assert.NoError(t, wsConn.Close())
+}
+
+func TestWebsocket_ServerConn_WriteFrame(t *testing.T) {
+
+	frames := []Frame{
+		{OpPing, []byte("Ping....")},
+		{OpPong, []byte("Pong....")},
+		{OpBinary, []byte("websocket")},
+	}
+
+	// 创建监听socket
+	ln, err := net.Listen("tcp", "127.0.0.1:")
+	assert.NoError(t, err)
+
+	// Mock Read-Only websocket 客户端
+	go func() {
+
+		url := fmt.Sprintf("ws://%s/", ln.Addr().String())
+		conn, buf, _, err := ws.Dial(context.Background(), url)
+		assert.NotNil(t, buf)
+		assert.NoError(t, err)
+
+		// 读
+		for _, frame := range frames {
+			f, err := ws.ReadFrame(buf)
+			assert.NoError(t, err)
+			assert.Equal(t, frame, Frame{OpCode: OpCode(f.Header.OpCode), Payload: f.Payload})
+		}
+
+		err = conn.Close()
+		assert.NoError(t, err)
+	}()
+
+	// 创建服务端socket
+	conn, err := ln.Accept()
+	assert.NoError(t, err)
+	assert.NoError(t, ln.Close())
+
+	// 创建服务端Websocket
+	wsConn, err := NewWSConn(conn, false)
+	assert.NoError(t, err)
+
+	for _, frame := range frames {
+		err = wsConn.WriteFrame(frame)
+		assert.NoError(t, err)
+	}
+
+	assert.NoError(t, wsConn.Close())
 }
