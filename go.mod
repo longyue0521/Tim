@@ -1,4 +1,4 @@
-module github.com/longyue0521/tim
+module github.com/longyue0521/Tim
 
 go 1.16
 

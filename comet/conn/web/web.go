@@ -6,7 +6,7 @@ import (
 	"net"
 
 	"github.com/gobwas/ws"
-	. "github.com/longyue0521/tim/comet/conn"
+	. "github.com/longyue0521/Tim/comet/conn"
 )
 
 var (

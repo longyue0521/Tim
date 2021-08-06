@@ -2,10 +2,13 @@ package comet
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"sync"
 	"time"
+
+	"github.com/pkg/errors"
+
+	. "github.com/longyue0521/Tim/comet/conn"
 )
 
 // Agent is interface of client side
@@ -24,7 +27,6 @@ type Channel interface {
 	Conn
 	Agent
 	ReadLoop(lst MessageListener) error
-	// SetWriteWait 设置写超时
 	SetReadTimeout(time.Duration)
 	SetWriteTimeout(time.Duration)
 }
@@ -43,8 +45,7 @@ type channel struct {
 	rdTimeout   time.Duration
 	wtTimeout   time.Duration
 	ctx         context.Context
-	cancelFunc  context.CancelFunc
-	//closed *Event
+	ctxCancel   context.CancelFunc
 }
 
 func NewChannel(id string, conn Conn) Channel {
@@ -59,12 +60,11 @@ func NewChannel(id string, conn Conn) Channel {
 		id:          id,
 		Conn:        conn,
 		payloadChan: make(chan []byte, 5),
-		//closed: NewEvent(),
-		rdTimeout: DefaultReadTimeout,
-		wtTimeout: DefaultWriteTimeout,
+		rdTimeout:   DefaultReadTimeout,
+		wtTimeout:   DefaultWriteTimeout,
 	}
 
-	c.ctx, c.cancelFunc = context.WithCancel(context.Background())
+	c.ctx, c.ctxCancel = context.WithCancel(context.Background())
 
 	return c
 }
@@ -74,13 +74,13 @@ func (c *channel) writeLoop() error {
 		select {
 		case payload := <-c.payloadChan:
 			//
-			err := c.WriteFrame(Frame{OpBinary, payload})
+			err := c.WriteFrame(Frame{Opcode: OpBinary, Payload: payload})
 			if err != nil {
 				return err
 			}
 			// retrive more payload as possible
 			for i := 0; i < len(c.payloadChan); i++ {
-				err = c.WriteFrame(Frame{OpBinary, <-c.payloadChan})
+				err = c.WriteFrame(Frame{Opcode: OpBinary, Payload: <-c.payloadChan})
 				if err != nil {
 					return err
 				}
@@ -90,9 +90,6 @@ func (c *channel) writeLoop() error {
 			if err != nil {
 				return err
 			}
-
-		// case <- c.closed.Done():
-		// 	return nil
 		case <-c.ctx.Done():
 			return nil
 		}
@@ -102,10 +99,6 @@ func (c *channel) writeLoop() error {
 func (c *channel) ID() string { return c.id }
 
 func (c *channel) Push(payload []byte) error {
-	// if ch.closed.HasFired() {
-	// 	return fmt.Errorf("channel %s has closed", ch.id)
-	// }
-
 	select {
 	case <-c.ctx.Done():
 		return fmt.Errorf("channel %s has closed", c.id)
@@ -114,7 +107,6 @@ func (c *channel) Push(payload []byte) error {
 		c.payloadChan <- payload
 		return nil
 	}
-
 }
 
 func (c *channel) ReadLoop(lst MessageListener) error {
@@ -131,15 +123,15 @@ func (c *channel) ReadLoop(lst MessageListener) error {
 		}
 
 		// handle Close Frame
-		if frame.OpCode == OpClose {
+		if frame.Opcode == OpClose {
 			// 这里应该主动关闭吧，而不是抛出错误
 			// 答：通过抛出错误来提醒调用者停止
 			return errors.New("remote close channel")
 		}
 		// handle Ping Frame
-		if frame.OpCode == OpPing {
+		if frame.Opcode == OpPing {
 			// TODO: add log.Trace
-			c.WriteFrame(Frame{OpCode: OpPong})
+			c.WriteFrame(Frame{Opcode: OpPong})
 			continue
 		}
 
@@ -167,9 +159,8 @@ func (c *channel) WriteFrame(f Frame) error {
 
 func (c *channel) Close() error {
 	c.once.Do(func() {
+		c.ctxCancel()
 		close(c.payloadChan)
-		//ch.closed.Fire()
-		c.cancelFunc()
 	})
 	return nil
 }

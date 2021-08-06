@@ -6,7 +6,7 @@ import (
 	"encoding/gob"
 	"net"
 
-	. "github.com/longyue0521/tim/comet/conn"
+	. "github.com/longyue0521/Tim/comet/conn"
 	"github.com/pkg/errors"
 )
 
