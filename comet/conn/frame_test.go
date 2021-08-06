@@ -1,4 +1,4 @@
-package comet
+package conn
 
 import (
 	"testing"

@@ -1,4 +1,4 @@
-package comet
+package conn
 
 import (
 	"errors"
@@ -33,6 +33,6 @@ func IsValidOpCode(code OpCode) bool {
 }
 
 type Frame struct {
-	OpCode  OpCode
+	Opcode  OpCode
 	Payload []byte
 }
